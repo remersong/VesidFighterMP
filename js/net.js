@@ -2,7 +2,14 @@
 // broker is only used to introduce the two browsers, then traffic goes
 // peer-to-peer.
 //
-// Model: host-authoritative. The host (always P1) runs the real simulation,
+// Two ways to connect:
+//  - "server" mode (default when GAME_SERVER_URL is set): both players
+//    connect by WebSocket to server/server.js, which runs the simulation.
+//    Both browsers behave like a guest below: stream inputs, render
+//    snapshots. The server's snapshots are deltas, merged by applySnapshot.
+//  - direct peer-to-peer (fallback), described below.
+//
+// P2P model: host-authoritative. The host (always P1) runs the real simulation,
 // feeding it its own keyboard plus the guest's streamed inputs. Every tick
 // the host broadcasts a snapshot; the guest (always P2) just renders the
 // latest snapshot and streams its inputs back.
@@ -26,7 +33,9 @@ const Net = (() => {
     for (const a of ACTIONS) VCONTROLS[slot][a] = 'V_' + slot + '_' + a;
   }
 
-  let mode = 'offline'; // offline | host | guest
+  let mode = 'offline'; // offline | host | guest | server
+  let slot = 'p1'; // our fighter in server mode
+  let ws = null;
   let peer = null;
   let ctrl = null;
   let fast = null;
@@ -51,7 +60,15 @@ const Net = (() => {
   function isOnline() { return mode !== 'offline'; }
   function isHost() { return mode === 'host'; }
   function isGuest() { return mode === 'guest'; }
-  function localSlot() { return mode === 'guest' ? 'p2' : 'p1'; }
+  function isServer() { return mode === 'server'; }
+  // True when someone else (P2P host or the server) runs the simulation.
+  function isRemoteSim() { return mode === 'guest' || mode === 'server'; }
+  function localSlot() {
+    if (mode === 'server') return slot;
+    return mode === 'guest' ? 'p2' : 'p1';
+  }
+  // P1 drives menu flow (Fight!, Rematch) in every online mode.
+  function isLeader() { return isOnline() && localSlot() === 'p1'; }
 
   function controlsFor(slot) {
     return isOnline() ? VCONTROLS[slot] : CONTROLS[slot];
@@ -135,6 +152,54 @@ const Net = (() => {
     peer.on('error', onPeerError);
   }
 
+  // ---- Server mode ----
+  function serverConnect(firstMsg) {
+    disconnect();
+    mode = 'server';
+    emit('status', { text: 'Connecting to server...' });
+    let sock;
+    try {
+      sock = new WebSocket(GAME_SERVER_URL);
+    } catch (e) {
+      disconnect('Could not reach the game server.');
+      return;
+    }
+    ws = sock;
+    sock.onopen = () => sock.send(JSON.stringify(firstMsg));
+    sock.onmessage = (ev) => {
+      if (ws !== sock) return;
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      onServerMessage(msg);
+    };
+    sock.onclose = () => {
+      if (ws === sock) disconnect('Lost connection to the game server.');
+    };
+  }
+
+  function onServerMessage(msg) {
+    if (msg.t === 's') {
+      Game.applySnapshot(msg);
+    } else if (msg.t === 'room') {
+      slot = msg.slot;
+      if (slot === 'p1') {
+        emit('status', { code: msg.code, text: 'Room code: ' + msg.code + ' -- waiting for opponent...' });
+      }
+    } else if (msg.t === 'connected') {
+      resetState();
+      emit('connected');
+    } else if (msg.t === 'error') {
+      disconnect(msg.text);
+    } else if (msg.t === 'left') {
+      disconnect('Opponent disconnected.');
+    } else {
+      emit('ctrl', msg);
+    }
+  }
+
+  function hostServer() { serverConnect({ t: 'create' }); }
+  function joinServer(code) { serverConnect({ t: 'join', code: code.trim().toUpperCase() }); }
+
   function onPeerError(err) {
     console.warn('peer error', err);
     let text = 'Connection error: ' + (err.type || err.message || err);
@@ -145,18 +210,26 @@ const Net = (() => {
   function disconnect(reason) {
     const wasOnline = isOnline();
     const p = peer;
-    peer = null; ctrl = null; fast = null;
+    const sock = ws;
+    peer = null; ctrl = null; fast = null; ws = null;
+    if (sock) { try { sock.close(); } catch (e) { /* ignore */ } }
     mode = 'offline';
     Effects.setRecording(false);
     if (p) { try { p.destroy(); } catch (e) { /* ignore */ } }
     if (wasOnline && reason) emit('disconnected', reason);
   }
 
+  function sendWs(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  }
+
   function sendCtrl(msg) {
+    if (ws) return sendWs(msg);
     if (ctrl && ctrl.open) ctrl.send(msg);
   }
 
   function sendFast(msg) {
+    if (ws) return sendWs(msg);
     if (fast && fast.open) fast.send(msg);
   }
 
@@ -209,7 +282,7 @@ const Net = (() => {
   }
 
   function checkTimeout() {
-    if (fast && fast.open && performance.now() - lastRecvAt > TIMEOUT_MS) {
+    if (!ws && fast && fast.open && performance.now() - lastRecvAt > TIMEOUT_MS) {
       disconnect('Lost connection to opponent.');
     }
   }
@@ -232,8 +305,8 @@ const Net = (() => {
   window.addEventListener('beforeunload', () => disconnect());
 
   return {
-    isOnline, isHost, isGuest, localSlot, controlsFor,
-    host, join, disconnect, on, sendCtrl,
+    isOnline, isHost, isGuest, isServer, isRemoteSim, isLeader, localSlot, controlsFor,
+    host, join, hostServer, joinServer, disconnect, on, sendCtrl,
     hostPreTick, hostPostTick, guestTick,
   };
 })();

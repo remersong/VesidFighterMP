@@ -140,10 +140,10 @@ const UI = (() => {
     const local = Net.localSlot();
     document.getElementById('p1-cards').classList.toggle('locked', online && local !== 'p1');
     document.getElementById('p2-cards').classList.toggle('locked', online && local !== 'p2');
-    document.getElementById('btn-fight').disabled = online && !Net.isHost();
+    document.getElementById('btn-fight').disabled = online && !Net.isLeader();
     document.getElementById('btn-select-customize').style.display = online ? 'none' : '';
     document.getElementById('select-online-note').textContent = !online ? ''
-      : (Net.isHost() ? 'Online: you are Player 1. Press Fight! when you are both ready.'
+      : (Net.isLeader() ? 'Online: you are Player 1. Press Fight! when you are both ready.'
         : 'Online: you are Player 2. Waiting for the host to start...');
     buildCharCards('p1-cards', 'p1');
     buildCharCards('p2-cards', 'p2');
@@ -213,8 +213,11 @@ const UI = (() => {
 
   // ---- Match flow ----
   function startFight() {
-    if (Net.isGuest()) return; // host drives match start
-    if (Net.isHost()) Net.sendCtrl({ t: 'start', p1: selected.p1, p2: selected.p2 });
+    if (Net.isOnline()) {
+      if (!Net.isLeader()) return; // P1 drives match start
+      Net.sendCtrl({ t: 'start', p1: selected.p1, p2: selected.p2 });
+      if (Net.isServer()) return; // wait for the server to echo 'start'
+    }
     beginMatch();
   }
 
@@ -228,8 +231,8 @@ const UI = (() => {
   function onMatchEnd(winnerSlot) {
     if (Net.isHost()) Net.sendCtrl({ t: 'matchEnd', winner: winnerSlot });
     const online = Net.isOnline();
-    document.getElementById('btn-rematch').disabled = online && !Net.isHost();
-    document.getElementById('btn-rematch').textContent = online && !Net.isHost() ? 'Host picks rematch' : 'Rematch';
+    document.getElementById('btn-rematch').disabled = online && !Net.isLeader();
+    document.getElementById('btn-rematch').textContent = online && !Net.isLeader() ? 'P1 picks rematch' : 'Rematch';
     const winnerChar = CHARACTERS[selected[winnerSlot]];
     document.getElementById('matchend-title').textContent =
       `${winnerChar.name} (${winnerSlot.toUpperCase()}) WINS THE MATCH!`;
@@ -290,12 +293,18 @@ const UI = (() => {
   });
   document.getElementById('btn-host').addEventListener('click', () => {
     setOnlineStatus('Creating room...');
-    Net.host();
+    if (useServer()) Net.hostServer(); else Net.host();
   });
+  const directToggle = document.getElementById('direct-toggle');
+  directToggle.parentElement.style.display = GAME_SERVER_URL ? '' : 'none';
+  function useServer() {
+    return !!GAME_SERVER_URL && !directToggle.checked;
+  }
+
   function doJoin() {
     const code = joinInput.value.trim();
     if (!code) { setOnlineStatus('Enter the room code from the host.'); return; }
-    Net.join(code);
+    if (useServer()) Net.joinServer(code); else Net.join(code);
   }
   document.getElementById('btn-join').addEventListener('click', doJoin);
   joinInput.addEventListener('keydown', (e) => {
@@ -326,13 +335,13 @@ const UI = (() => {
         buildCharCards(msg.slot + '-cards', msg.slot);
         renderPreview(msg.slot, msg.id);
       }
-    } else if (msg.t === 'start' && Net.isGuest() && CHARACTERS[msg.p1] && CHARACTERS[msg.p2]) {
+    } else if (msg.t === 'start' && Net.isRemoteSim() && CHARACTERS[msg.p1] && CHARACTERS[msg.p2]) {
       selected.p1 = msg.p1;
       selected.p2 = msg.p2;
       beginMatch();
     } else if (msg.t === 'select') {
       openSelect();
-    } else if (msg.t === 'matchEnd' && Net.isGuest()) {
+    } else if (msg.t === 'matchEnd' && Net.isRemoteSim()) {
       onMatchEnd(msg.winner);
     }
   });

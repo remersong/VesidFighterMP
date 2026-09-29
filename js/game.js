@@ -359,13 +359,17 @@ const Game = (() => {
     };
   }
 
+  // Accepts full snapshots (P2P) or deltas (server): absent fields are unchanged.
   function applySnapshot(s) {
-    matchState = s.m; stateTimer = s.st; roundTimeLeft = s.rt; roundMessage = s.rm;
+    if (s.m !== undefined) matchState = s.m;
+    if (s.st !== undefined) stateTimer = s.st;
+    if (s.rt !== undefined) roundTimeLeft = s.rt;
+    if (s.rm !== undefined) roundMessage = s.rm;
     if (s.f && p1 && p2) {
       Object.assign(p1, s.f[0]);
       Object.assign(p2, s.f[1]);
     }
-    projectiles = s.pr.map(p => Object.assign(p, { owner: p.owner === 'p1' ? p1 : p2 }));
+    if (s.pr) projectiles = s.pr.map(p => Object.assign(p, { owner: p.owner === 'p1' ? p1 : p2 }));
     Effects.replayEvents(s.fx);
   }
 

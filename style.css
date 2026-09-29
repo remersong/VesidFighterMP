@@ -528,3 +528,10 @@ button:disabled {
   cursor: default;
   transform: none;
 }
+
+.direct-label {
+  display: block;
+  color: #cbb9e0;
+  font-size: 0.85rem;
+  margin: 6px auto;
+}

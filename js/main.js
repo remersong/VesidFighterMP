@@ -23,7 +23,7 @@
     if (!paused) {
       accumulator += delta;
       while (accumulator >= FIXED_STEP) {
-        if (Net.isGuest()) {
+        if (Net.isRemoteSim()) {
           Net.guestTick();
         } else if (Net.isHost()) {
           Net.hostPreTick();

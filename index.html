@@ -47,14 +47,15 @@
 
     <div id="screen-online" class="screen hidden">
       <h2>Play Online</h2>
-      <p class="hint">One player hosts and shares the room code, the other joins with it. Online, either key set (WASD+F/G/H or Arrows+L/;/') controls your fighter.</p>
+      <p class="hint">One player creates a room and shares the code, the other joins with it. Online, either key set (WASD+F/G/H or Arrows+L/;/') controls your fighter.</p>
       <div class="menu-buttons">
-        <button id="btn-host" class="btn-primary">Host Game</button>
+        <button id="btn-host" class="btn-primary">Create Room</button>
       </div>
       <div class="online-join">
         <input id="join-code" type="text" maxlength="5" placeholder="ROOM CODE" autocomplete="off" spellcheck="false">
         <button id="btn-join">Join</button>
       </div>
+      <label class="direct-label"><input type="checkbox" id="direct-toggle"> Direct connection (no server -- use if the server is down; both players must match)</label>
       <p id="online-status" class="online-status"></p>
       <button id="btn-online-back">Back</button>
     </div>
