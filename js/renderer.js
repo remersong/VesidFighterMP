@@ -83,7 +83,12 @@ const Renderer = (() => {
     Effects.spawnAuraPuff(fighter.x + (Math.random() * 2 - 1) * fighter.width * 0.3, fighter.y - fighter.height * 0.9, color);
   }
 
-  function drawFighter(ctx, fighter) {
+  // opts.card: drawing onto a 3D paper card (renderer3d.js). The card is
+  // mirrored in 3D to face left, so draw facing right, and skip the fake
+  // ground shadow since the 3D scene casts a real one.
+  function drawFighter(ctx, fighter, opts) {
+    const card = !!(opts && opts.card);
+    const facing = card ? 1 : fighter.facing;
     const pose = fighter.currentPose();
     const customImg = SpriteManager.getImage(fighter.slot, pose)
       || SpriteManager.getImage(fighter.slot, 'idle');
@@ -102,21 +107,23 @@ const Renderer = (() => {
     // translated/rotated space) so it stays flat on the platform and
     // shrinks/fades with height instead of following a jumping character
     // straight up.
-    const heightAboveGround = Math.max(0, GROUND_Y - fighter.y);
-    const shadowScale = Math.max(0.35, 1 - heightAboveGround / 220);
-    ctx.save();
-    ctx.globalAlpha = 0.32 * shadowScale;
-    ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.ellipse(fighter.x, GROUND_Y + 3, fighter.width * 0.34 * shadowScale, 7 * shadowScale, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    if (!card) {
+      const heightAboveGround = Math.max(0, GROUND_Y - fighter.y);
+      const shadowScale = Math.max(0.35, 1 - heightAboveGround / 220);
+      ctx.save();
+      ctx.globalAlpha = 0.32 * shadowScale;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(fighter.x, GROUND_Y + 3, fighter.width * 0.34 * shadowScale, 7 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(fighter.x, fighter.y);
 
     if (fighter.state === 'ko' || fighter.state === 'knockdown') {
-      ctx.rotate(fighter.facing * Math.PI / 2 * (fighter.state === 'ko' ? 1 : 0.82));
+      ctx.rotate(facing * Math.PI / 2 * (fighter.state === 'ko' ? 1 : 0.82));
     }
 
     // A roll/spin ability rotates the whole sprite, but drawPlaceholder
@@ -134,7 +141,7 @@ const Renderer = (() => {
       ctx.translate(0, -pivotY);
     }
 
-    ctx.scale(fighter.facing, 1);
+    ctx.scale(facing, 1);
 
     if (fighter.isPhased) ctx.globalAlpha = 0.35;
 

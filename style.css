@@ -25,10 +25,30 @@ html, body {
   height: min(100vh, 56.25vw);
   image-rendering: pixelated;
   display: block;
+  position: relative;
+  z-index: 1;
+}
+
+/* 3D view: WebGL canvas underneath, the 2D canvas becomes a HUD overlay. */
+#game-canvas-3d {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(100vw, 177.78vh);
+  height: min(100vh, 56.25vw);
+  display: block;
+  z-index: 0;
+}
+
+#game-canvas.overlay-3d {
+  background: transparent;
+  image-rendering: auto;
 }
 
 .screen {
   position: absolute;
+  z-index: 2;
   inset: 0;
   display: flex;
   flex-direction: column;
@@ -535,3 +555,5 @@ button:disabled {
   font-size: 0.85rem;
   margin: 6px auto;
 }
+
+#btn-view-toggle.hidden { display: none; }

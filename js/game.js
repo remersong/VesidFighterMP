@@ -309,6 +309,15 @@ const Game = (() => {
   }
 
   function render(ctx) {
+    // 3D view (renderer3d.js) draws the world; this canvas becomes a
+    // transparent overlay for the HUD only.
+    if (window.Renderer3D && Renderer3D.isActive()) {
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      Renderer3D.render(p1 && p2 ? { p1, p2, projectiles } : null);
+      if (p1 && p2) drawOverlay(ctx);
+      return;
+    }
+
     Renderer.drawStage(ctx);
     if (!p1 || !p2) return;
 
@@ -323,6 +332,10 @@ const Game = (() => {
 
     ctx.restore();
 
+    drawOverlay(ctx);
+  }
+
+  function drawOverlay(ctx) {
     Renderer.drawHUD(ctx, p1, p2);
 
     if (matchState === 'fight') {
